@@ -38,3 +38,7 @@ test_tipc/web/node_modules/
 
 .venv/
 .worktrees/
+
+checkpoints/
+monitor_log.md
+train_nohup.log.bak*

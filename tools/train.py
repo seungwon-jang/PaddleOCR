@@ -216,6 +216,23 @@ def main(config, device, logger, vdl_writer, seed):
         config, model, optimizer, config["Architecture"]["model_type"]
     )
 
+    # optionally freeze backbone (curriculum phase 1: train head/neck only)
+    if config["Global"].get("freeze_backbone", False):
+        if hasattr(model, "backbone"):
+            n_frozen = 0
+            for p in model.backbone.parameters():
+                p.stop_gradient = True
+                n_frozen += 1
+            logger.info(
+                "[freeze] backbone {} params frozen — only head/neck will train".format(
+                    n_frozen
+                )
+            )
+        else:
+            logger.warning(
+                "[freeze] freeze_backbone=True but model has no 'backbone' attr — skipped"
+            )
+
     if config["Global"]["distributed"]:
         find_unused_parameters = config["Global"].get("find_unused_parameters", False)
         model = paddle.DataParallel(

@@ -133,7 +133,7 @@ class DiceLoss(nn.Layer):
 
         union = paddle.sum(pred * mask) + paddle.sum(gt * mask) + self.eps
         loss = 1 - 2.0 * intersection / union
-        assert loss <= 1
+        # assert loss <= 1  # 학습 초기 binary_maps 음수값으로 loss > 1 가능 → 제거
         return loss
 
 

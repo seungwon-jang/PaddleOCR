@@ -6,10 +6,10 @@ Global:
   log_smooth_window: 20
   print_batch_step: 100
   save_model_dir: ./output/PP-OCRv5_mobile_det
-  save_epoch_step: 10
+  save_epoch_step: 1
   eval_batch_step:
   - 0
-  - 1500
+  - 500
   cal_metric_during_train: false
   checkpoints:
   pretrained_model: https://paddleocr.bj.bcebos.com/pretrained/PPLCNetV3_x0_75_ocr_det.pdparams
@@ -80,7 +80,6 @@ Train:
         img_mode: BGR
         channel_first: false
     - DetLabelEncode: null
-    - CopyPaste: null
     - IaaAugment:
         augmenter_args:
         - type: Fliplr
@@ -95,7 +94,7 @@ Train:
           args:
             size:
             - 0.5
-            - 3
+            - 1.0   # medi_data 최대 12,000px → 1.5× 시 18,000px → imgaug segfault
     - EastRandomCropData:
         size:
         - 640
@@ -109,7 +108,7 @@ Train:
         total_epoch: *epoch_num
     - MakeShrinkMap:
         shrink_ratio: 0.4
-        min_text_size: 8
+        min_text_size: 6
         total_epoch: *epoch_num
     - NormalizeImage:
         scale: 1./255.

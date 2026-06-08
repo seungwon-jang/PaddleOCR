@@ -80,7 +80,10 @@ class MakeBorderMap(object):
         padding = pyclipper.PyclipperOffset()
         padding.AddPath(subject, pyclipper.JT_ROUND, pyclipper.ET_CLOSEDPOLYGON)
 
-        padded_polygon = np.array(padding.Execute(distance)[0])
+        expanded = padding.Execute(distance)
+        if not expanded:  # 너무 작은 polygon은 expand 결과가 빈 리스트
+            return
+        padded_polygon = np.array(expanded[0])
         cv2.fillPoly(mask, [padded_polygon.astype(np.int32)], 1.0)
 
         xmin = padded_polygon[:, 0].min()

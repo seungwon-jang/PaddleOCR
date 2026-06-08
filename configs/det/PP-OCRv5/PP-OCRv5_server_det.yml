@@ -79,7 +79,6 @@ Train:
         img_mode: BGR
         channel_first: false
     - DetLabelEncode: null
-    - CopyPaste: null
     - IaaAugment:
         augmenter_args:
         - type: Fliplr
@@ -94,7 +93,7 @@ Train:
           args:
             size:
             - 0.5
-            - 3
+            - 1.5
     - EastRandomCropData:
         size:
         - 640
@@ -147,6 +146,8 @@ Eval:
         channel_first: false
     - DetLabelEncode: null
     - DetResizeForTest:
+        limit_side_len: 640
+        limit_type: max
     - NormalizeImage:
         scale: 1./255.
         mean:

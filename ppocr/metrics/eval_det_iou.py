@@ -16,14 +16,17 @@ class DetectionIoUEvaluator(object):
         self.area_precision_constraint = area_precision_constraint
 
     def evaluate_image(self, gt, pred):
+        def _poly(p):
+            return p if isinstance(p, Polygon) else Polygon(p)
+
         def get_union(pD, pG):
-            return Polygon(pD).union(Polygon(pG)).area
+            return _poly(pD).union(_poly(pG)).area
 
         def get_intersection_over_union(pD, pG):
             return get_intersection(pD, pG) / get_union(pD, pG)
 
         def get_intersection(pD, pG):
-            return Polygon(pD).intersection(Polygon(pG)).area
+            return _poly(pD).intersection(_poly(pG)).area
 
         def compute_ap(confList, matchList, numGtCare):
             correct = 0
@@ -118,7 +121,7 @@ class DetectionIoUEvaluator(object):
                 for dontCarePol in gtDontCarePolsNum:
                     dontCarePol = gtPols[dontCarePol]
                     intersected_area = get_intersection(dontCarePol, detPol)
-                    pdDimensions = Polygon(detPol).area
+                    pdDimensions = _poly(detPol).area
                     precision = (
                         0 if pdDimensions == 0 else intersected_area / pdDimensions
                     )

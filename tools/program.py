@@ -253,6 +253,8 @@ def train(
             )
         )
     save_epoch_step = config["Global"]["save_epoch_step"]
+    save_checkpoint_step = config["Global"].get("save_checkpoint_step", 0)
+    grad_accum_steps = config["Global"].get("grad_accum_steps", 1)
     save_model_dir = config["Global"]["save_model_dir"]
     if not os.path.exists(save_model_dir):
         os.makedirs(save_model_dir)
@@ -363,10 +365,12 @@ def train(
                         preds = model(images)
                 preds = to_float32(preds)
                 loss = loss_class(preds, batch)
-                avg_loss = loss["loss"]
+                avg_loss = loss["loss"] / grad_accum_steps
                 scaled_avg_loss = scaler.scale(avg_loss)
                 scaled_avg_loss.backward()
-                scaler.minimize(optimizer, scaled_avg_loss)
+                if (idx + 1) % grad_accum_steps == 0 or idx >= max_iter - 1:
+                    scaler.minimize(optimizer, scaled_avg_loss)
+                    optimizer.clear_grad()
             else:
                 if model_type == "table" or extra_input:
                     preds = model(images, data=batch[1:])
@@ -387,11 +391,11 @@ def train(
                 else:
                     preds = model(images)
                 loss = loss_class(preds, batch)
-                avg_loss = loss["loss"]
+                avg_loss = loss["loss"] / grad_accum_steps
                 avg_loss.backward()
-                optimizer.step()
-
-            optimizer.clear_grad()
+                if (idx + 1) % grad_accum_steps == 0 or idx >= max_iter - 1:
+                    optimizer.step()
+                    optimizer.clear_grad()
 
             if (
                 cal_metric_during_train and epoch % calc_epoch_interval == 0
@@ -493,14 +497,41 @@ def train(
                     )
                 )
                 logger.info(strs)
+                if global_step % 100 == 0 and paddle.device.is_compiled_with_cuda():
+                    paddle.device.cuda.empty_cache()
 
                 total_samples = 0
                 train_reader_cost = 0.0
                 train_batch_cost = 0.0
+
+            # step-level checkpoint save
+            if (
+                save_checkpoint_step > 0
+                and global_step % save_checkpoint_step == 0
+                and dist.get_rank() == 0
+            ):
+                save_model(
+                    model,
+                    optimizer,
+                    save_model_dir,
+                    logger,
+                    config,
+                    is_best=False,
+                    prefix="latest",
+                    best_model_dict=best_model_dict,
+                    epoch=epoch,
+                    global_step=global_step,
+                )
+
             # eval
             if (
-                global_step > start_eval_step
-                and (global_step - start_eval_step) % eval_batch_step == 0
+                (
+                    global_step == 100
+                    or (
+                        global_step > start_eval_step
+                        and (global_step - start_eval_step) % eval_batch_step == 0
+                    )
+                )
                 and dist.get_rank() == 0
             ):
                 if model_average:
@@ -752,11 +783,14 @@ def eval(
                 eval_class(post_result[0], post_result[1], epoch_reset=(idx == 0))
             else:
                 post_result = post_process_class(preds, batch_numpy[1])
+                del preds
                 eval_class(post_result, batch_numpy)
 
             pbar.update(1)
             total_frame += len(images)
             sum_images += 1
+            if sum_images % 100 == 0:
+                paddle.device.cuda.empty_cache()
         # Get final metric，eg. acc or hmean
         metric = eval_class.get_metric()
 

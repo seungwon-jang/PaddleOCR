@@ -20,6 +20,14 @@ import os
 # Prevent automatic updates in Albumentations for stability in augmentation behavior
 os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
+import cv2
+
+# Disable OpenCV's internal thread pool.
+# When PaddlePaddle forks DataLoader worker processes, OpenCV's thread pool
+# gets inherited from the parent and can cause SIGSEGV in worker processes.
+# Setting 0 forces single-threaded mode inside each worker.
+cv2.setNumThreads(0)
+
 import numpy as np
 import albumentations as A
 from albumentations.core.transforms_interface import DualTransform

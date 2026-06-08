@@ -20,6 +20,10 @@ Global:
   d2s_train_image_shape: [3, 640, 640]
   distributed: true
 
+wandb:
+  project: ppocrv5-det-medi
+  name: stage1_medi_mobile
+
 Architecture:
   model_type: det
   algorithm: DB

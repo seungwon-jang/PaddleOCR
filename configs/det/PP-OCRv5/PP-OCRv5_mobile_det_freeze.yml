@@ -21,8 +21,8 @@ Global:
   distributed: true
 
 wandb:
-  project: ppocrv5-det-medi-nonfreeze
-  name: stage1_medi_mobile_nonfreeze
+  project: ppocrv5-det-medi
+  name: stage1_medi_mobile
 
 Architecture:
   model_type: det

@@ -526,11 +526,8 @@ def train(
             # eval
             if (
                 (
-                    global_step == 100
-                    or (
-                        global_step > start_eval_step
-                        and (global_step - start_eval_step) % eval_batch_step == 0
-                    )
+                    global_step > start_eval_step
+                    and (global_step - start_eval_step) % eval_batch_step == 0
                 )
                 and dist.get_rank() == 0
             ):

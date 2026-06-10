@@ -61,10 +61,9 @@ def main(config, device, logger, vdl_writer, seed):
         )
         return
 
-    if config["Eval"]:
-        valid_dataloader = build_dataloader(config, "Eval", device, logger, seed)
-    else:
-        valid_dataloader = None
+    # eval DataLoader는 program.train() 안에서 eval 직전 생성/직후 파괴 (lazy).
+    # 미리 만들면 train workers와 eval workers가 학습 내내 동시 상주 → deadlock.
+    valid_dataloader = None
     step_pre_epoch = len(train_dataloader)
 
     # build post process

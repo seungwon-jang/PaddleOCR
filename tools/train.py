@@ -17,6 +17,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import multiprocessing
+multiprocessing.set_start_method("forkserver", force=True)
+
 import os
 import sys
 

@@ -21,8 +21,8 @@ Global:
   distributed: true
 
 wandb:
-  project: ppocrv5-det-medi-nonfreeze
-  name: stage1_medi_mobile_nonfreeze
+  project: ppocrv5-det-medi-2stage
+  name: stage2_medi_mobile
 
 Architecture:
   model_type: det
@@ -84,8 +84,6 @@ Train:
         img_mode: BGR
         channel_first: false
     - DetLabelEncode: null
-    - LimitDetImageSize:
-        max_side_len: 1280
     - IaaAugment:
         augmenter_args:
         - type: Fliplr
@@ -139,7 +137,7 @@ Train:
     shuffle: true
     drop_last: false
     batch_size_per_card: 8
-    num_workers: 2
+    num_workers: 8
 
 Eval:
   dataset:

@@ -534,3 +534,27 @@ class GrayImageChannelFormat(object):
 
         data["src_image"] = img
         return data
+
+
+class LimitDetImageSize(object):
+    """
+    학습 중 대형 이미지(인보이스 등)가 augmentation 전에 거대한 중간 버퍼를 생성해
+    worker에서 메모리 할당 실패(SIGSEGV)를 유발하는 것을 방지.
+    이미지와 polygon 좌표를 동시에 스케일해 annotation 정합성 유지.
+    DetResizeForTest는 eval 전용(poly 미처리)이므로 학습에는 이 클래스를 사용.
+    """
+
+    def __init__(self, max_side_len=1280, **kwargs):
+        self.max_side_len = max_side_len
+
+    def __call__(self, data):
+        img = data["image"]
+        h, w = img.shape[:2]
+        ratio = min(self.max_side_len / max(h, w), 1.0)
+        if ratio < 1.0:
+            new_w = max(int(w * ratio), 1)
+            new_h = max(int(h * ratio), 1)
+            data["image"] = cv2.resize(img, (new_w, new_h))
+            if "polys" in data and data["polys"] is not None:
+                data["polys"] = data["polys"] * ratio
+        return data

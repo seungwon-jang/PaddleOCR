@@ -546,13 +546,9 @@ def train(
                     )
                     Model_Average.apply()
                 # lazy eval DataLoader: eval 직전 생성 → eval 직후 즉시 파괴.
-                # train workers(4)가 살아있는 상태에서 eval workers를 fork하면
-                # 부모 메모리(~15GB)가 workers 수만큼 page table에 복사 → OOM.
-                # eval workers를 2개로 제한해 train(4)+eval(2)=6개 수준 유지.
                 import copy, gc
                 paddle.device.cuda.empty_cache()
                 eval_cfg = copy.deepcopy(config)
-                eval_cfg["Eval"]["loader"]["num_workers"] = 2
                 _eval_dl = build_dataloader(eval_cfg, "Eval", device, logger)
                 cur_metric = eval(
                     model,

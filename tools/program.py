@@ -240,12 +240,18 @@ def train(
             if not eval_batch_epoch
             else step_pre_epoch * eval_batch_epoch
         )
-        if len(valid_dataloader) == 0:
+        # lazy: valid_dataloader가 None이면 잠깐 만들어서 길이만 확인 후 즉시 파괴
+        _check_dl = valid_dataloader
+        if _check_dl is None and config.get("Eval"):
+            _check_dl = build_dataloader(config, "Eval", device, logger)
+        if _check_dl is None or len(_check_dl) == 0:
             logger.info(
                 "No Images in eval dataset, evaluation during training "
                 "will be disabled"
             )
             start_eval_step = 1e111
+        if valid_dataloader is None and _check_dl is not None:
+            del _check_dl
         logger.info(
             "During the training process, after the {}th iteration, "
             "an evaluation is run every {} iterations".format(
@@ -542,9 +548,17 @@ def train(
                         max_average_window=15625,
                     )
                     Model_Average.apply()
+                # lazy eval DataLoader: eval 직전 생성 → eval 직후 즉시 파괴.
+                # train workers(4)가 살아있는 상태에서 eval workers를 fork하면
+                # 부모 메모리(~15GB)가 workers 수만큼 page table에 복사 → OOM.
+                # eval workers를 2개로 제한해 train(4)+eval(2)=6개 수준 유지.
+                import copy, gc
+                eval_cfg = copy.deepcopy(config)
+                eval_cfg["Eval"]["loader"]["num_workers"] = 2
+                _eval_dl = build_dataloader(eval_cfg, "Eval", device, logger)
                 cur_metric = eval(
                     model,
-                    valid_dataloader,
+                    _eval_dl,
                     post_process_class,
                     eval_class,
                     model_type,
@@ -555,6 +569,8 @@ def train(
                     amp_custom_white_list=amp_custom_white_list,
                     amp_dtype=amp_dtype,
                 )
+                del _eval_dl
+                gc.collect()
                 cur_metric_str = "cur metric, {}".format(
                     ", ".join(["{}: {}".format(k, v) for k, v in cur_metric.items()])
                 )

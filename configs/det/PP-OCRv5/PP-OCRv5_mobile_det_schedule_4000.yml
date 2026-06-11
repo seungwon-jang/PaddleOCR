@@ -1,0 +1,183 @@
+Global:
+  model_name: PP-OCRv5_mobile_det # To use static model for inference.
+  debug: false
+  use_gpu: true
+  # total 60000 step
+  epoch_num: &epoch_num 120                      # 4,000장 fine-tuning (500 step/epoch → 60,000 step)
+  log_smooth_window: 20
+  print_batch_step: 100
+  save_model_dir: ./output/medi_mobile_det_4000
+  save_epoch_step: 4                             # 4 epoch마다 체크포인트 저장
+  eval_batch_step:
+  - 0
+  - 1000                                           # 4 epoch eval (1000 step = 4 epoch)
+  cal_metric_during_train: false
+  checkpoints:
+  # 전체 PP-OCRv5_mobile_det 가중치로 fine-tuning (백본 전용 X)
+  pretrained_model: /workspace/ocr_LLM/paddle_pretrained_data/PP-OCRv5_mobile_det_pretrained
+  save_inference_dir: null
+  use_visualdl: false
+  infer_img: doc/imgs_en/img_10.jpg
+  save_res_path: ./checkpoints/det_db/predicts_db.txt
+  d2s_train_image_shape: [3, 640, 640]
+  distributed: false                              # 단일 GPU
+
+wandb:
+  project: ppocrv5-det-medi-schedule
+  name: medi_mobile_4000
+
+Architecture:
+  model_type: det
+  algorithm: DB
+  Transform: null
+  Backbone:
+    name: PPLCNetV3
+    scale: 0.75
+    det: True
+  Neck:
+    name: RSEFPN
+    out_channels: 96
+    shortcut: True
+  Head:
+    name: DBHead
+    k: 50
+    fix_nan: True
+
+Loss:
+  name: DBLoss
+  balance_loss: true
+  main_loss_type: DiceLoss
+  alpha: 5
+  beta: 10
+  ohem_ratio: 3
+
+Optimizer:
+  name: Adam
+  beta1: 0.9
+  beta2: 0.999
+  lr:
+    name: Cosine
+    learning_rate: 0.00005      # 단일 GPU batch8 fine-tuning (1e-4의 절반, 도메인변화 보정)
+    warmup_epoch: 5             #2500 step warmup
+  regularizer:
+    name: L2
+    factor: 5.0e-05
+
+PostProcess:
+  name: DBPostProcess
+  thresh: 0.3
+  box_thresh: 0.6
+  max_candidates: 1000
+  unclip_ratio: 1.5
+
+Metric:
+  name: DetMetric
+  main_indicator: hmean
+
+Train:
+  dataset:
+    name: SimpleDataSet
+    data_dir: /workspace/medi_data/det_data
+    label_file_list:
+      - /workspace/medi_data/det_data/train_4000.txt   # 스케줄: 4000/6000/8000/10000 으로 교체
+    ratio_list: [1.0]
+    transforms:
+    - DecodeImage:
+        img_mode: BGR
+        channel_first: false
+    - DetLabelEncode: null
+    - LimitDetImageSize:
+        max_side_len: 1280
+    - IaaAugment:
+        augmenter_args:
+        - type: Fliplr
+          args:
+            p: 0.5
+        - type: Affine
+          args:
+            rotate:
+            - -10
+            - 10
+        - type: Resize
+          args:
+            size:
+            - 0.5
+            - 1.0   # medi_data 최대 12,000px → 1.5× 시 18,000px → imgaug segfault
+    - EastRandomCropData:
+        size:
+        - 640
+        - 640
+        max_tries: 50
+        keep_ratio: true
+    - MakeBorderMap:
+        shrink_ratio: 0.4
+        thresh_min: 0.3
+        thresh_max: 0.7
+        total_epoch: *epoch_num
+    - MakeShrinkMap:
+        shrink_ratio: 0.4
+        min_text_size: 6
+        total_epoch: *epoch_num
+    - NormalizeImage:
+        scale: 1./255.
+        mean:
+        - 0.485
+        - 0.456
+        - 0.406
+        std:
+        - 0.229
+        - 0.224
+        - 0.225
+        order: hwc
+    - ToCHWImage: null
+    - KeepKeys:
+        keep_keys:
+        - image
+        - threshold_map
+        - threshold_mask
+        - shrink_map
+        - shrink_mask
+  loader:
+    shuffle: true
+    drop_last: false
+    batch_size_per_card: 8
+    num_workers: 4
+
+Eval:
+  dataset:
+    name: SimpleDataSet
+    data_dir: /workspace/medi_data/det_data
+    label_file_list:
+      - /workspace/medi_data/det_data/val_small.txt     # 학습중 모니터링용 (199장, eval 속도↑)
+      # - /workspace/medi_data/det_data/val.txt         # 최종 성능 측정용 (997장)
+    transforms:
+    - DecodeImage:
+        img_mode: BGR
+        channel_first: false
+    - DetLabelEncode: null
+    - DetResizeForTest:
+        resize_long: 960    # 추론 파이프라인(resize_long=960)과 동일 조건으로 평가
+    - NormalizeImage:
+        scale: 1./255.
+        mean:
+        - 0.485
+        - 0.456
+        - 0.406
+        std:
+        - 0.229
+        - 0.224
+        - 0.225
+        order: hwc
+    - ToCHWImage: null
+    - KeepKeys:
+        keep_keys:
+        - image
+        - shape
+        - polys
+        - ignore_tags
+  loader:
+    shuffle: false
+    drop_last: false
+    batch_size_per_card: 1
+    num_workers: 2
+profiler_options: null

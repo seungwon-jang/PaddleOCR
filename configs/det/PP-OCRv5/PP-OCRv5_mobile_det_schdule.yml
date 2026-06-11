@@ -2,10 +2,10 @@ Global:
   model_name: PP-OCRv5_mobile_det # To use static model for inference.
   debug: false
   use_gpu: true
-  epoch_num: &epoch_num 100                       # 2,000장 fine-tuning (250 step/epoch)
-  log_smooth_window: 20
   # total 60000 step
-  print_batch_step: 240
+  epoch_num: &epoch_num 240                      # 2,000장 fine-tuning (250 step/epoch)
+  log_smooth_window: 20
+  print_batch_step: 100
   save_model_dir: ./output/medi_mobile_det_2000
   save_epoch_step: 4                             # 4 epoch마다 체크포인트 저장
   eval_batch_step:

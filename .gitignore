@@ -42,3 +42,6 @@ test_tipc/web/node_modules/
 checkpoints/
 monitor_log.md
 train_nohup.log.bak*
+
+# 로컬 학습 실행 스크립트
+run_*schedule*.sh

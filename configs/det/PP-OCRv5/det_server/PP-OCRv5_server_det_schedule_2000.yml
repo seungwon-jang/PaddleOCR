@@ -3,7 +3,7 @@ Global:
   debug: false
   use_gpu: true
   # total 60000 step
-  epoch_num: &epoch_num 120                      # 4,000장 fine-tuning (500 step/epoch → 60,000 step)
+  epoch_num: &epoch_num 240                      # 4,000장 fine-tuning (500 step/epoch → 60,000 step)
   log_smooth_window: 20
   print_batch_step: 100
   save_model_dir: ./output/medi_server_det_2000
@@ -57,7 +57,7 @@ Optimizer:
   lr:
     name: Cosine
     learning_rate: 0.00005      # 단일 GPU batch8 fine-tuning (1e-4의 절반, 도메인변화 보정)
-    warmup_epoch: 5             #2500 step warmup
+    warmup_epoch: 10             #2500 step warmup
   regularizer:
     name: L2
     factor: 5.0e-05

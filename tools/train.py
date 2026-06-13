@@ -17,8 +17,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+# DataLoader worker 생성은 기본 'fork' 사용.
+# forkserver 로 두면 worker spawn 시 헬퍼가 train.py(__main__)를 runpy 로 재실행 →
+# albumentations 재import 중 `SystemError: setattr returned NULL` 로 헬퍼가 죽고
+# 메인이 BrokenPipe 로 중단됨. fork 는 재import 없이 메모리 복사라 이 문제가 없다.
 import multiprocessing
-multiprocessing.set_start_method("forkserver", force=True)
+multiprocessing.set_start_method("fork", force=True)
 
 import os
 import sys

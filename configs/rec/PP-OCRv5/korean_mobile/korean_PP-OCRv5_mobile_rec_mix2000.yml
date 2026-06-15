@@ -2,10 +2,10 @@ Global:
   model_name: korean_PP-OCRv5_mobile_rec
   debug: false
   use_gpu: true
-  epoch_num: 30                                  # [변경] 75 → 30 (fine-tune, early-stop; §2)
+  epoch_num: 9                                   # 총 step≈60,000 (batch 64, mix2000)
   log_smooth_window: 20
   print_batch_step: 50
-  save_model_dir: /data/ocr_models/rec_medi_korean   # [변경] 큰 디스크
+  save_model_dir: /data/ocr_models/rec_medi_mix_2000
   save_epoch_step: 2
   eval_batch_step: [0, 500]                      # [변경] [0,1000] → [0,500] (자주 평가, overfit 모니터링; §2)
   cal_metric_during_train: true
@@ -82,8 +82,9 @@ Train:
     data_dir: /data/rec_medi_schedule            # [변경] rec 데이터 루트 (--det-label 로 생성)
     ext_op_transform_idx: 1
     label_file_list:
-    - /data/rec_medi_schedule/train_1000.txt     # [변경] 스케줄 medi rec (스케일링: -o 로 사이즈 교체)
-    ratio_list: [1.0]                            # 혼합 실험 시: -o 로 [1.0, 0.x] + general.txt 추가
+    - /data/rec_medi_schedule/train_2000.txt
+    - /data/rec_korean_data/train_abs.txt
+    ratio_list: [1.0, 0.82]
     transforms:
     - DecodeImage:
         img_mode: BGR

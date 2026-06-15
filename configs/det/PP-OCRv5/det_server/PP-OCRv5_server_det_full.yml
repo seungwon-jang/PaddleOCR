@@ -1,0 +1,183 @@
+Global:
+  model_name: PP-OCRv5_server_det # To use static model for inference.
+  debug: false
+  use_gpu: true
+  # full medi 데이터(train 83,406장) 최종 fine-tuning. 1 epoch≈10,426 step.
+  #   10 epoch ≈ 104k step (schedule 60k 예산보다 약간↑, 데이터 10배라 더 봐도 OK).
+  #   엄밀 동일예산 비교는 6, 최대 성능은 15~20.
+  epoch_num: &epoch_num 10
+  log_smooth_window: 20
+  print_batch_step: 50
+  save_model_dir: /data/ocr_models/medi_server_full   # 용량 큰 디스크
+  save_epoch_step: 1                                   # 매 epoch 저장
+  eval_batch_step:
+  - 0
+  - 2500                                               # 2,500 step(~0.24 epoch)마다 eval
+  cal_metric_during_train: false
+  checkpoints:
+  # 전체 PP-OCRv5_server_det 가중치에서 fine-tuning (백본 전용 X — 백본만이면 neck/head 랜덤이라 학습 안 됨)
+  pretrained_model: /home/kist/watt/paddle_pretrained_data/PP-OCRv5_server_det_pretrained
+  save_inference_dir: null
+  use_visualdl: false
+  infer_img: doc/imgs_en/img_10.jpg
+  save_res_path: ./checkpoints/det_db/predicts_db.txt
+  distributed: false                                   # 단일 GPU (RTX 5080)
+
+wandb:
+  project: ppocrv5-det-medi-schedule
+  name: medi_server_full
+
+Architecture:
+  model_type: det
+  algorithm: DB
+  Transform: null
+  Backbone:
+    name: PPHGNetV2_B4
+    det: True
+  Neck:
+    name: LKPAN
+    out_channels: 256
+    intracl: true
+  Head:
+    name: PFHeadLocal
+    k: 50
+    mode: "large"
+
+Loss:
+  name: DBLoss
+  balance_loss: true
+  main_loss_type: DiceLoss
+  alpha: 5
+  beta: 10
+  ohem_ratio: 3
+
+Optimizer:
+  name: Adam
+  beta1: 0.9
+  beta2: 0.999
+  lr:
+    name: Cosine
+    learning_rate: 0.00005      # 단일 GPU batch8 fine-tuning (schedule과 동일, 공식 0.001은 8GPU용)
+    warmup_epoch: 1             # ~10k step warmup
+  regularizer:
+    name: L2
+    factor: 5.0e-05
+
+PostProcess:
+  name: DBPostProcess
+  thresh: 0.3
+  box_thresh: 0.6
+  max_candidates: 1000
+  unclip_ratio: 1.5
+
+Metric:
+  name: DetMetric
+  main_indicator: hmean
+
+Train:
+  dataset:
+    name: SimpleDataSet
+    data_dir: /data/det_medi                           # full 데이터 루트
+    label_file_list:
+      - /data/det_medi/train.txt                       # 83,406장 (full)
+    ratio_list: [1.0]
+    transforms:
+    - DecodeImage:
+        img_mode: BGR
+        channel_first: false
+    - DetLabelEncode: null
+    - LimitDetImageSize:
+        max_side_len: 1280                             # medi 최대 12,000px → imgaug 크래시 방지 (필수)
+    - IaaAugment:
+        augmenter_args:
+        - type: Fliplr
+          args:
+            p: 0.5
+        - type: Affine
+          args:
+            rotate:
+            - -10
+            - 10
+        - type: Resize
+          args:
+            size:
+            - 0.5
+            - 1.0                                      # 공식 1.5 → 1.0 (대형 이미지 폭주 방지)
+    - EastRandomCropData:
+        size:
+        - 640
+        - 640
+        max_tries: 50
+        keep_ratio: true
+    - MakeBorderMap:
+        shrink_ratio: 0.4
+        thresh_min: 0.3
+        thresh_max: 0.7
+        total_epoch: *epoch_num
+    - MakeShrinkMap:
+        shrink_ratio: 0.4
+        min_text_size: 6                               # 공식 8 → 6 (작은 글자 학습)
+        total_epoch: *epoch_num
+    - NormalizeImage:
+        scale: 1./255.
+        mean:
+        - 0.485
+        - 0.456
+        - 0.406
+        std:
+        - 0.229
+        - 0.224
+        - 0.225
+        order: hwc
+    - ToCHWImage: null
+    - KeepKeys:
+        keep_keys:
+        - image
+        - threshold_map
+        - threshold_mask
+        - shrink_map
+        - shrink_mask
+  loader:
+    shuffle: true
+    drop_last: false
+    batch_size_per_card: 8
+    num_workers: 4
+
+Eval:
+  dataset:
+    name: SimpleDataSet
+    data_dir: /data/det_medi
+    label_file_list:
+      - /data/det_medi/val_small.txt                   # 학습중 모니터링용 (2,000장, 빠름)
+      # - /data/det_medi/val.txt                       # 최종 성능 측정용 (20,833장) — 학습 후 별도 eval
+    transforms:
+    - DecodeImage:
+        img_mode: BGR
+        channel_first: false
+    - DetLabelEncode: null
+    - DetResizeForTest:
+        resize_long: 960                               # 추론 파이프라인과 동일 조건 (schedule과 일치)
+    - NormalizeImage:
+        scale: 1./255.
+        mean:
+        - 0.485
+        - 0.456
+        - 0.406
+        std:
+        - 0.229
+        - 0.224
+        - 0.225
+        order: hwc
+    - ToCHWImage: null
+    - KeepKeys:
+        keep_keys:
+        - image
+        - shape
+        - polys
+        - ignore_tags
+  loader:
+    shuffle: false
+    drop_last: false
+    batch_size_per_card: 1
+    num_workers: 0                                      # eval 단일프로세스 (worker spawn 회피)
+profiler_options: null

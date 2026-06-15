@@ -93,6 +93,11 @@ class MakeBorderMap(object):
         width = xmax - xmin + 1
         height = ymax - ymin + 1
 
+        # padding된 polygon이 캔버스 밖으로 완전히 벗어나면 이 박스만 skip
+        # (이미지 경계 글자 → broadcast 에러로 이미지 전체가 드롭되는 것 방지)
+        if ymax < 0 or ymin > canvas.shape[0] - 1 or xmax < 0 or xmin > canvas.shape[1] - 1:
+            return
+
         polygon[:, 0] = polygon[:, 0] - xmin
         polygon[:, 1] = polygon[:, 1] - ymin
 

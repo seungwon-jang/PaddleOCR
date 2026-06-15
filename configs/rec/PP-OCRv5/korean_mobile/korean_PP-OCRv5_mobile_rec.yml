@@ -1,0 +1,143 @@
+Global:
+  model_name: korean_PP-OCRv5_mobile_rec
+  debug: false
+  use_gpu: true
+  epoch_num: 30                                  # [변경] 75 → 30 (fine-tune, early-stop; §2)
+  log_smooth_window: 20
+  print_batch_step: 50
+  save_model_dir: /data/ocr_models/rec_medi_korean   # [변경] 큰 디스크
+  save_epoch_step: 2
+  eval_batch_step: [0, 500]                      # [변경] [0,1000] → [0,500] (자주 평가, overfit 모니터링; §2)
+  cal_metric_during_train: true
+  # [변경] 경로 A: 한국어 학습용 pretrained (.pdparams). 먼저 다운로드 필요 — 아래 README 주석 참고
+  pretrained_model: /home/kist/watt/paddle_pretrained_data/korean_PP-OCRv5_mobile_rec_pretrained
+  checkpoints:
+  save_inference_dir:
+  use_visualdl: false
+  infer_img:
+  character_dict_path: ./ppocr/utils/dict/ppocrv5_korean_dict.txt   # [유지] 경로 A — dict 변경 없음 (acc=0 없음)
+  max_text_length: &max_text_length 25           # [유지] medi 텍스트는 단어/구 단위로 짧음 (§3 미해당)
+  infer_mode: false
+  use_space_char: true
+  distributed: false                             # [변경] 단일 GPU (RTX 5080)
+  save_res_path: ./output/rec/predicts_ppocrv5.txt
+  d2s_train_image_shape: [3, 48, 320]
+
+
+Optimizer:
+  name: Adam
+  beta1: 0.9
+  beta2: 0.999
+  lr:
+    name: Cosine
+    learning_rate: 0.0001                        # [변경] 0.0005 → 1e-4 (pretrained 로드 + batch128; §4)
+    warmup_epoch: 2                              # [변경] 5 → 2 (pretrained 안정화용 짧게; §2)
+  regularizer:
+    name: L2
+    factor: 3.0e-05                              # [유지] 기본 정규화 (§8)
+
+
+Architecture:                                    # [유지] 경로 A — 아키텍처 그대로 (rec 데이터 크므로 NRTR 유지; §3)
+  model_type: rec
+  algorithm: SVTR_LCNet
+  Transform:
+  Backbone:
+    name: PPLCNetV3
+    scale: 0.95
+  Head:
+    name: MultiHead
+    head_list:
+      - CTCHead:
+          Neck:
+            name: svtr
+            dims: 120
+            depth: 2
+            hidden_dims: 120
+            kernel_size: [1, 3]
+            use_guide: True
+          Head:
+            fc_decay: 0.00001
+      - NRTRHead:
+          nrtr_dim: 384
+          max_text_length: *max_text_length
+
+Loss:
+  name: MultiLoss
+  loss_config_list:
+    - CTCLoss:
+    - NRTRLoss:
+
+PostProcess:
+  name: CTCLabelDecode
+
+Metric:
+  name: RecMetric
+  main_indicator: acc
+  ignore_space: False
+
+Train:
+  dataset:
+    name: MultiScaleDataSet
+    ds_width: false
+    data_dir: /data/rec_medi_schedule            # [변경] rec 데이터 루트 (--det-label 로 생성)
+    ext_op_transform_idx: 1
+    label_file_list:
+    - /data/rec_medi_schedule/train_1000.txt     # [변경] 스케줄 medi rec (스케일링: -o 로 사이즈 교체)
+    ratio_list: [1.0]                            # 혼합 실험 시: -o 로 [1.0, 0.x] + general.txt 추가
+    transforms:
+    - DecodeImage:
+        img_mode: BGR
+        channel_first: false
+    - RecConAug:
+        prob: 0.5
+        ext_data_num: 2
+        image_shape: [48, 320, 3]
+        max_text_length: *max_text_length
+    - RecAug:
+    - MultiLabelEncode:
+        gtc_encode: NRTRLabelEncode
+    - KeepKeys:
+        keep_keys:
+        - image
+        - label_ctc
+        - label_gtc
+        - length
+        - valid_ratio
+  sampler:
+    name: MultiScaleSampler
+    scales: [[320, 32], [320, 48], [320, 64]]
+    first_bs: &bs 128                            # [유지] batch 128 (mobile rec 가벼워 16GB OK; §4 LR 기준)
+    fix_bs: false
+    divided_factor: [8, 16]
+    is_training: True
+  loader:
+    shuffle: true
+    batch_size_per_card: *bs
+    drop_last: true
+    num_workers: 8
+Eval:
+  dataset:
+    name: SimpleDataSet
+    data_dir: /data/rec_medi_schedule            # [변경]
+    label_file_list:
+    - /data/rec_medi_schedule/val.txt            # [변경] 고정 검증셋 (모든 사이즈 동일)
+    transforms:
+    - DecodeImage:
+        img_mode: BGR
+        channel_first: false
+    - MultiLabelEncode:
+        gtc_encode: NRTRLabelEncode
+    - RecResizeImg:
+        image_shape: [3, 48, 320]
+    - KeepKeys:
+        keep_keys:
+        - image
+        - label_ctc
+        - label_gtc
+        - length
+        - valid_ratio
+  loader:
+    shuffle: false                               # [변경] 평가는 shuffle 불필요
+    drop_last: false
+    batch_size_per_card: 128
+    num_workers: 4

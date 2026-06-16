@@ -24,6 +24,10 @@ Global:
   d2s_train_image_shape: [3, 48, 320]
 
 
+wandb:
+  project: ppocrv5-rec-medi
+  name: rec_medi_mix_4000
+
 Optimizer:
   name: Adam
   beta1: 0.9

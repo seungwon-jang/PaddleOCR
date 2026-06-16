@@ -7,7 +7,7 @@ Global:
   print_batch_step: 50
   save_model_dir: /data/ocr_models/rec_medi_only_2000
   save_epoch_step: 2
-  eval_batch_step: [0, 500]                      # [변경] [0,1000] → [0,500] (자주 평가, overfit 모니터링; §2)
+  eval_batch_step: [0, 1000]                      # [변경] [0,1000] → [0,500] (자주 평가, overfit 모니터링; §2)
   cal_metric_during_train: true
   # [변경] 경로 A: 한국어 학습용 pretrained (.pdparams). 먼저 다운로드 필요 — 아래 README 주석 참고
   pretrained_model: /home/kist/watt/paddle_pretrained_data/korean_PP-OCRv5_mobile_rec_pretrained
